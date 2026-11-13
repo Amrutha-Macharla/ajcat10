@@ -103,19 +103,21 @@ def init_db():
         ]
         cursor.executemany("INSERT INTO rates (id, name, rate, unit, color, display_order) VALUES (?, ?, ?, ?, ?, ?)", rates_data)
 
-    # Seed Default Categories if empty
-    cursor.execute("SELECT COUNT(*) FROM categories")
+    # Seed Default Categories if first time initializing database
+    cursor.execute("SELECT COUNT(*) FROM settings")
     if cursor.fetchone()[0] == 0:
-        categories_data = [
-            ('cat_gold_black_beads', 'Gold Black Beads', 'G'),
-            ('cat_1_gram_gold_earrings', '1 Gram Gold Earrings', '1'),
-            ('cat_18_ct_chains', '18 Ct Chains', '1'),
-            ('cat_gold_mattilu', 'Gold Mattilu', 'G'),
-            ('cat_gold_thalli_chains', 'Gold Thalli Chains', 'G'),
-            ('cat_diamond_jewellery', 'Diamond Jewellery', 'D'),
-            ('cat_silver_articles', 'Silver Articles', 'S')
-        ]
-        cursor.executemany("INSERT INTO categories (id, name, icon_letter) VALUES (?, ?, ?)", categories_data)
+        cursor.execute("SELECT COUNT(*) FROM categories")
+        if cursor.fetchone()[0] == 0:
+            categories_data = [
+                ('cat_gold_black_beads', 'Gold Black Beads', 'G'),
+                ('cat_1_gram_gold_earrings', '1 Gram Gold Earrings', '1'),
+                ('cat_18_ct_chains', '18 Ct Chains', '1'),
+                ('cat_gold_mattilu', 'Gold Mattilu', 'G'),
+                ('cat_gold_thalli_chains', 'Gold Thalli Chains', 'G'),
+                ('cat_diamond_jewellery', 'Diamond Jewellery', 'D'),
+                ('cat_silver_articles', 'Silver Articles', 'S')
+            ]
+            cursor.executemany("INSERT INTO categories (id, name, icon_letter) VALUES (?, ?, ?)", categories_data)
 
 
 

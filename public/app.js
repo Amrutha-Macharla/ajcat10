@@ -144,7 +144,10 @@ async function trySyncFromFirebase() {
         ]);
 
         if (!fbProdsRes && !fbCatsRes) return false;
-        if ((fbProdsRes && !fbProdsRes.ok) || (fbCatsRes && !fbCatsRes.ok)) return false;
+        if ((fbProdsRes && !fbProdsRes.ok) || (fbCatsRes && !fbCatsRes.ok)) {
+            console.error("Firebase connection error: HTTP " + (fbProdsRes?.status || fbCatsRes?.status) + ". Make sure Firebase Realtime Database Rules allow read/write: { \".read\": true, \".write\": true }");
+            return false;
+        }
 
         const [fbRates, fbCats, fbProds, fbSettings] = await Promise.all([
             fbRatesRes ? fbRatesRes.json().catch(() => null) : null,
@@ -206,7 +209,8 @@ async function trySyncFromFirebase() {
             if (fbSettings.cloudinary_preset) state.cloudinaryPreset = fbSettings.cloudinary_preset;
         }
 
-        return hasData;
+        console.log("Firebase sync connected successfully: " + cleanUrl);
+        return true;
     } catch (e) {
         console.warn("Firebase check:", e);
         return false;
@@ -279,7 +283,27 @@ async function pushAllDataToFirebase() {
 window.syncDataDirectly = pushAllDataToFirebase;
 
 async function syncWithFirebaseNow() {
-    return await pushAllDataToFirebase();
+    if (!state.firebaseUrl) {
+        alert("No Firebase URL configured.");
+        return;
+    }
+    const btn = window.event ? window.event.currentTarget : null;
+    const oldHtml = btn ? btn.innerHTML : null;
+    if (btn) {
+        btn.innerHTML = `<span>Syncing...</span>`;
+    }
+
+    const ok = await pushAllDataToFirebase();
+    if (btn && oldHtml) {
+        btn.innerHTML = oldHtml;
+        if (window.lucide) lucide.createIcons();
+    }
+
+    if (ok) {
+        alert("Database successfully linked and synchronized with Firebase!");
+    } else {
+        alert("Sync to Firebase failed! Please check your Firebase Realtime Database Rules allow read/write:\n\n{\n  \"rules\": {\n    \".read\": true,\n    \".write\": true\n  }\n}");
+    }
 }
 
 function renderAll() {
