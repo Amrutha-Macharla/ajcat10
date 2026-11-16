@@ -1189,14 +1189,19 @@ async function uploadImageFile(file) {
     setImgStatus("Uploading photo...", "loading");
 
     // 1. Try Cloudinary direct upload if configured
-    if (state.cloudinaryName && state.cloudinaryPreset) {
-        const rawPreset = state.cloudinaryPreset.trim();
+    if (state.cloudinaryName) {
+        const rawPreset = (state.cloudinaryPreset || '').trim();
         const presetsToTry = [
             rawPreset,
             rawPreset.replace(/\s+/g, '_'),
             rawPreset.replace(/\s+/g, '-'),
-            rawPreset.replace(/\s+/g, '')
-        ];
+            rawPreset.replace(/\s+/g, ''),
+            'ml_default',
+            'amrutha_jewellers',
+            'asp catalogue',
+            'ajcat10',
+            'unsigned'
+        ].filter(Boolean);
         const uniquePresets = [...new Set(presetsToTry)];
 
         for (const preset of uniquePresets) {
@@ -1208,9 +1213,9 @@ async function uploadImageFile(file) {
 
                 const uploadUrl = `https://api.cloudinary.com/v1_1/${state.cloudinaryName}/image/upload`;
                 const clRes = await fetch(uploadUrl, { method: 'POST', body: formData });
-                const clData = await clRes.json();
+                const clData = await clRes.json().catch(() => null);
                 
-                if (clData.secure_url) {
+                if (clData && clData.secure_url) {
                     const finalUrl = clData.secure_url;
                     document.getElementById('prod-image-url').value = finalUrl;
                     updateImagePreview(finalUrl);
@@ -1225,7 +1230,7 @@ async function uploadImageFile(file) {
                         }).catch(() => {});
                     }
                     return finalUrl;
-                } else if (clData.error) {
+                } else if (clData && clData.error) {
                     console.warn(`Cloudinary preset "${preset}" returned error:`, clData.error.message);
                 }
             } catch (err) {
@@ -1234,8 +1239,8 @@ async function uploadImageFile(file) {
         }
     }
 
-    // 2. Fallback to local server upload (/api/upload)
-    setImgStatus("Saving to local server...", "loading");
+    // 2. Fallback to local server upload or embedded base64
+    setImgStatus("Saving photo...", "loading");
     try {
         const base64Data = await new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -1244,24 +1249,38 @@ async function uploadImageFile(file) {
             reader.readAsDataURL(file);
         });
 
-        const res = await fetch('/api/upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                filename: `product_${Date.now()}_${file.name}`,
-                image_data: base64Data
-            })
-        });
-        const data = await res.json();
-        if (data.success && data.url) {
-            document.getElementById('prod-image-url').value = data.url;
-            updateImagePreview(data.url);
-            setImgStatus("✓ Saved locally", "success");
-            return data.url;
+        // Try local server upload if available
+        let savedUrl = null;
+        try {
+            const safeName = (file.name || 'image.png').replace(/[^a-zA-Z0-9._-]/g, '_');
+            const res = await fetch('/api/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    filename: `product_${Date.now()}_${safeName}`,
+                    image_data: base64Data
+                })
+            });
+            if (res.ok) {
+                const data = await res.json().catch(() => null);
+                if (data && data.success && data.url) {
+                    savedUrl = data.url;
+                }
+            }
+        } catch (serverErr) {
+            console.warn("Local server upload endpoint not available:", serverErr);
+        }
+
+        if (savedUrl) {
+            document.getElementById('prod-image-url').value = savedUrl;
+            updateImagePreview(savedUrl);
+            setImgStatus("✓ Saved photo", "success");
+            return savedUrl;
         } else {
+            // Self-contained embedded image (works on Netlify, offline, or standalone)
             document.getElementById('prod-image-url').value = base64Data;
             updateImagePreview(base64Data);
-            setImgStatus("✓ Captured", "success");
+            setImgStatus("✓ Photo attached", "success");
             return base64Data;
         }
     } catch (err) {

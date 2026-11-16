@@ -490,25 +490,32 @@ class CatalogueHTTPHandler(BaseHTTPRequestHandler):
 
         # Image Upload (Base64 file upload)
         elif path == '/api/upload':
-            image_data = body.get('image_data')
-            filename = body.get('filename') or f"product_{uuid.uuid4().hex[:8]}.png"
-            
-            if not image_data:
-                conn.close()
-                return self.send_json({"success": False, "error": "No image data provided"}, 400)
-            
-            if ',' in image_data:
-                header, encoded = image_data.split(',', 1)
-            else:
-                encoded = image_data
+            try:
+                image_data = body.get('image_data')
+                raw_filename = body.get('filename') or f"product_{uuid.uuid4().hex[:8]}.png"
+                filename = re.sub(r'[^a-zA-Z0-9._-]', '_', raw_filename)
+                if not filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
+                    filename += '.png'
+                
+                if not image_data:
+                    conn.close()
+                    return self.send_json({"success": False, "error": "No image data provided"}, 400)
+                
+                if ',' in image_data:
+                    header, encoded = image_data.split(',', 1)
+                else:
+                    encoded = image_data
 
-            file_bytes = base64.b64decode(encoded)
-            file_path = os.path.join(UPLOADS_DIR, filename)
-            with open(file_path, 'wb') as f:
-                f.write(file_bytes)
-            
-            conn.close()
-            return self.send_json({"success": True, "url": f"/uploads/{filename}"})
+                file_bytes = base64.b64decode(encoded)
+                file_path = os.path.join(UPLOADS_DIR, filename)
+                with open(file_path, 'wb') as f:
+                    f.write(file_bytes)
+                
+                conn.close()
+                return self.send_json({"success": True, "url": f"/uploads/{filename}"})
+            except Exception as e:
+                conn.close()
+                return self.send_json({"success": False, "error": f"Upload failed: {str(e)}"}, 500)
 
         # Update Settings / Cipher
         elif path == '/api/settings':
