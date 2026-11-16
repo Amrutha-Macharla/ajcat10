@@ -6,11 +6,13 @@ High-performance REST API and Static Web Server with SQLite
 
 import os
 import sys
+import re
 import json
 import sqlite3
 import base64
 import uuid
 import mimetypes
+import traceback
 from urllib.parse import urlparse, parse_qs
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -416,10 +418,6 @@ class CatalogueHTTPHandler(BaseHTTPRequestHandler):
         elif path == '/api/products':
             prod_id = body.get('id') or ('prod_' + str(uuid.uuid4())[:8])
             code = body.get('code', '').strip().upper()
-            if not code:
-                cursor.execute("SELECT COUNT(*) FROM products")
-                count = cursor.fetchone()[0] + 1
-                code = f"AJ-{count:04d}"
 
             cat_id = body.get('category_id')
             cursor.execute("SELECT name FROM categories WHERE id = ?", (cat_id,))
@@ -429,41 +427,66 @@ class CatalogueHTTPHandler(BaseHTTPRequestHandler):
             rates_map = get_current_rates_map(conn)
             mrp, price_code, breakdown_code = calculate_product_pricing(body, rates_map)
 
-            cursor.execute("SELECT id FROM products WHERE id = ?", (prod_id,))
-            exists = cursor.fetchone()
-            
-            if exists:
-                cursor.execute("""
-                UPDATE products SET
-                    code = ?, category_id = ?, category_name = ?, metal_type = ?, carats = ?,
-                    item_wt = ?, net_wt = ?, stone_cost = ?, va_percent = ?, mc = ?,
-                    manual_mrp = ?, mrp = ?, price_code = ?, breakdown_code = ?,
-                    image_url = ?, notes = ?
-                WHERE id = ?
-                """, (
-                    code, cat_id, cat_name, body.get('metal_type', 'Gold'), body.get('carats', '22k'),
-                    float(body.get('item_wt') or 0), float(body.get('net_wt') or 0), float(body.get('stone_cost') or 0),
-                    float(body.get('va_percent') or 0), float(body.get('mc') or 0), float(body.get('manual_mrp') or 0),
-                    mrp, price_code, breakdown_code, body.get('image_url', ''), body.get('notes', ''),
-                    prod_id
-                ))
-            else:
-                cursor.execute("""
-                INSERT INTO products (
-                    id, code, category_id, category_name, metal_type, carats,
-                    item_wt, net_wt, stone_cost, va_percent, mc, manual_mrp,
-                    mrp, price_code, breakdown_code, image_url, notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    prod_id, code, cat_id, cat_name, body.get('metal_type', 'Gold'), body.get('carats', '22k'),
-                    float(body.get('item_wt') or 0), float(body.get('net_wt') or 0), float(body.get('stone_cost') or 0),
-                    float(body.get('va_percent') or 0), float(body.get('mc') or 0), float(body.get('manual_mrp') or 0),
-                    mrp, price_code, breakdown_code, body.get('image_url', ''), body.get('notes', '')
-                ))
+            try:
+                cursor.execute("SELECT id FROM products WHERE id = ?", (prod_id,))
+                exists = cursor.fetchone()
+                
+                if exists:
+                    cursor.execute("""
+                    UPDATE products SET
+                        code = ?, category_id = ?, category_name = ?, metal_type = ?, carats = ?,
+                        item_wt = ?, net_wt = ?, stone_cost = ?, va_percent = ?, mc = ?,
+                        manual_mrp = ?, mrp = ?, price_code = ?, breakdown_code = ?,
+                        image_url = ?, notes = ?
+                    WHERE id = ?
+                    """, (
+                        code, cat_id, cat_name, body.get('metal_type', 'Gold'), body.get('carats', '22k'),
+                        float(body.get('item_wt') or 0), float(body.get('net_wt') or 0), float(body.get('stone_cost') or 0),
+                        float(body.get('va_percent') or 0), float(body.get('mc') or 0), float(body.get('manual_mrp') or 0),
+                        mrp, price_code, breakdown_code, body.get('image_url', ''), body.get('notes', ''),
+                        prod_id
+                    ))
+                else:
+                    # If code is not provided or already taken by an existing product, find next available code
+                    if not code:
+                        code = "AJ-0001"
+                    cursor.execute("SELECT id FROM products WHERE code = ?", (code,))
+                    code_exists = cursor.fetchone()
+                    if code_exists:
+                        cursor.execute("SELECT code FROM products")
+                        existing_codes = cursor.fetchall()
+                        max_num = 0
+                        for row in existing_codes:
+                            c_val = row['code'] if isinstance(row, sqlite3.Row) else row[0]
+                            m = re.search(r'AJ-(\d+)', c_val, re.I)
+                            if m:
+                                max_num = max(max_num, int(m.group(1)))
+                        code = f"AJ-{max_num + 1:04d}"
 
-            conn.commit()
-            conn.close()
-            return self.send_json({"success": True, "id": prod_id, "code": code, "mrp": mrp, "price_code": price_code})
+                    cursor.execute("""
+                    INSERT INTO products (
+                        id, code, category_id, category_name, metal_type, carats,
+                        item_wt, net_wt, stone_cost, va_percent, mc, manual_mrp,
+                        mrp, price_code, breakdown_code, image_url, notes
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        prod_id, code, cat_id, cat_name, body.get('metal_type', 'Gold'), body.get('carats', '22k'),
+                        float(body.get('item_wt') or 0), float(body.get('net_wt') or 0), float(body.get('stone_cost') or 0),
+                        float(body.get('va_percent') or 0), float(body.get('mc') or 0), float(body.get('manual_mrp') or 0),
+                        mrp, price_code, breakdown_code, body.get('image_url', ''), body.get('notes', '')
+                    ))
+
+                conn.commit()
+                conn.close()
+                return self.send_json({"success": True, "id": prod_id, "code": code, "mrp": mrp, "price_code": price_code})
+            except sqlite3.IntegrityError as e:
+                conn.rollback()
+                conn.close()
+                return self.send_json({"success": False, "error": f"Database integrity error: {str(e)}"}, 400)
+            except Exception as e:
+                conn.rollback()
+                conn.close()
+                return self.send_json({"success": False, "error": f"Failed to save product: {str(e)}"}, 500)
 
         # Image Upload (Base64 file upload)
         elif path == '/api/upload':

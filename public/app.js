@@ -1341,6 +1341,19 @@ async function handleSaveProduct(e) {
             image_url
         };
 
+        // Save to local server
+        try {
+            const res = await fetch('/api/products', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data && data.code) {
+                payload.code = data.code;
+            }
+        } catch (err) {}
+
         // Update state directly
         const existingIdx = state.products.findIndex(p => p.id === prodId);
         if (existingIdx >= 0) {
@@ -1348,15 +1361,6 @@ async function handleSaveProduct(e) {
         } else {
             state.products.unshift(payload);
         }
-
-        // Save to local server
-        try {
-            await fetch('/api/products', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-        } catch (err) {}
 
         // Save to Firebase RTDB
         if (state.firebaseUrl) {
