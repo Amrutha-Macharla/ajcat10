@@ -11,7 +11,7 @@ const DEFAULT_CIPHER = {
 const DEFAULT_FIREBASE_URL = "https://ajcat10-7498b-default-rtdb.asia-southeast1.firebasedatabase.app";
 const DEFAULT_WHATSAPP_NUMBER = "919492443916";
 const DEFAULT_CLOUDINARY_NAME = "ejzxqyym";
-const DEFAULT_CLOUDINARY_PRESET = "asp catalogue";
+const DEFAULT_CLOUDINARY_PRESET = "ml_default";
 
 // Auto-migrate legacy localStorage defaults
 if (localStorage.getItem('aj_firebase_url') === "https://ajcat5-default-rtdb.asia-southeast1.firebasedatabase.app" ||
@@ -29,7 +29,7 @@ if (localStorage.getItem('aj_cloudinary_name') === "agc6iqec" ||
     localStorage.setItem('aj_cloudinary_name', DEFAULT_CLOUDINARY_NAME);
 }
 if (localStorage.getItem('aj_cloudinary_preset') === "ajcat5" ||
-    localStorage.getItem('aj_cloudinary_preset') === "ml_default") {
+    localStorage.getItem('aj_cloudinary_preset') === "asp catalogue") {
     localStorage.setItem('aj_cloudinary_preset', DEFAULT_CLOUDINARY_PRESET);
 }
 
